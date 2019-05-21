@@ -1,3 +1,6 @@
+checkpoint
+__pycache__
+*.ckpt*
 tensorboard
 video
 .ipynb_checkpoints
