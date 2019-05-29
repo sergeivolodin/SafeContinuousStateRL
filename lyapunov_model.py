@@ -1,4 +1,5 @@
 import gym
+import sys
 from time import sleep
 import pulp
 import tensorflow as tf
@@ -338,7 +339,8 @@ def learning_iterations(iterations, eps_decay, rollouts_per_train, L = 100, d0_ 
     """ Learn with parameters """
     
     print('Parameters: ' + str(locals()))
-    plot_decay(eps_decay)
+    if sample_q:
+      plot_decay(eps_decay, xmax = iterations)
     
     r, c = [], []
     for i in tqdm(range(iterations)):
@@ -356,7 +358,7 @@ def learning_iterations(iterations, eps_decay, rollouts_per_train, L = 100, d0_ 
         train_step(L = L, d0_ = d0_, learn_policy = learn_policy, learn_q = learn_q, do_safe = do_safe,
                    only_constraint = only_constraint)
     plot_performance(r, c)
-    print_info(get_rollout())
+    print_info(get_rollout(sample_q = sample_q, eps = eps))
 
 def enable_video():
   global env
@@ -376,7 +378,7 @@ def checkpoint():
     fn = './' + summary_name + "_" + str(checkpoint_i) + ".ckpt"
     checkpoint_i += 1
     tf.train.Saver().save(sess, fn)
-    print('Saved to %s' % fn)
+    print('%s' % fn)
 
 def discount(rewards):
     """ Discount and do cumulative sum """

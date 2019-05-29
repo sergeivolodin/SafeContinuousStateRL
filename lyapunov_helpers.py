@@ -171,9 +171,10 @@ def plot_performance(r, c):
     plt.legend()
     plt.show()
 
-def plot_decay(eps_decay):
+def plot_decay(eps_decay, xmax = 1000):
     plt.title('Epsilon greedy decay')
     plt.ylabel('eps for eps-greedy')
     plt.xlabel('Iteration')
+    plt.xlim(0,xmax)
     plt.plot(eps_decay.keys(), eps_decay.values())
     plt.show()
