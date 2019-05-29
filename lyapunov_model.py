@@ -115,6 +115,7 @@ summary_name = str(datetime.datetime.now())
 s_writer = tf.summary.FileWriter('./tensorboard/' + summary_name)
 
 env = gym.make('CartPole-v0')
+print('Creating the environment')
 
 def sample_action(observation, sample_q = False, eps = 0):
     """ Sample an action from the policy """
@@ -132,7 +133,7 @@ def sample_action(observation, sample_q = False, eps = 0):
         # choice for real policy
         return np.random.choice(range(2), p = p)
 
-def get_rollout(**kwargs):
+def get_rollout(do_render = False, **kwargs):
     """ Obtain rollout using policy """
     done = False
     observation = env.reset()
@@ -143,9 +144,11 @@ def get_rollout(**kwargs):
     # S: new state
     # N: true if need next (non-terminal)
     # C: cost obtained
+    if do_render: env.render()
     while not done:
         act = sample_action(observation, **kwargs)
         observation_, reward, done, info = env.step(act) # take a random action
+        if do_render: env.render()
         curr = (observation, act, reward, observation_, True, cost(observation_))
         sarsnc.append(curr)
         replay.store(curr)
@@ -351,6 +354,15 @@ def learning_iterations(iterations, eps_decay, rollouts_per_train, L = 100, d0_ 
                    only_constraint = only_constraint)
     plot_performance(r, c)
     print_info(get_rollout())
+
+def enable_video():
+  global env
+  print('Enabling video')
+  env = gym.wrappers.Monitor(env, "./gym-results/")
+
+def disable_video():
+  global env
+  env = env.unwrapped
 
 def restore(fn):
   tf.train.Saver().restore(sess, fn)
