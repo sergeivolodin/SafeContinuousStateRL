@@ -1,4 +1,5 @@
 import gym
+from time import sleep
 import pulp
 import tensorflow as tf
 from tqdm import tqdm
@@ -133,7 +134,7 @@ def sample_action(observation, sample_q = False, eps = 0):
         # choice for real policy
         return np.random.choice(range(2), p = p)
 
-def get_rollout(do_render = False, **kwargs):
+def get_rollout(do_render = False, delay = None, **kwargs):
     """ Obtain rollout using policy """
     done = False
     observation = env.reset()
@@ -156,6 +157,8 @@ def get_rollout(do_render = False, **kwargs):
         if done:
             # crucial, otherwise Q blows up...
             replay.store((observation_, sample_action(observation_), reward, observation_, False, cost(observation_)))
+
+        if delay: sleep(delay)
         
         observation = observation_
     env.close()
@@ -358,7 +361,7 @@ def learning_iterations(iterations, eps_decay, rollouts_per_train, L = 100, d0_ 
 def enable_video():
   global env
   print('Enabling video')
-  env = gym.wrappers.Monitor(env, "./gym-results/")
+  env = gym.wrappers.Monitor(env, "./gym-results/", force = True)
 
 def disable_video():
   global env
