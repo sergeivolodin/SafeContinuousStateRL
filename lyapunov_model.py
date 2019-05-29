@@ -362,3 +362,21 @@ def checkpoint():
     checkpoint_i += 1
     tf.train.Saver().save(sess, fn)
     print('Saved to %s' % fn)
+
+def discount(rewards):
+    """ Discount and do cumulative sum """
+    sum_so_far = 0.0
+    rewards_so_far = []
+    for r in rewards[::-1]:
+        sum_so_far = sum_so_far * gamma_discount + r
+        rewards_so_far.append(sum_so_far)
+    return rewards_so_far[::-1]
+
+assert np.allclose(discount([1,2,3]), [3 * gamma_discount ** 2 + 2 * gamma_discount + 1, 3 * gamma_discount + 2, 3]), "Check discount implementation"
+
+def print_info(rollout):
+    _,a_,r_,_,_,c_ = zip(*rollout)
+    print('Mean action: %.2f' % np.mean(a_))
+    print('Total reward: %d / disc %.2f' % (np.sum(r_), discount(r_)[0]))
+    print('Total cost: %d / disc %.2f' % (np.sum(c_), discount(c_)[0]))
+

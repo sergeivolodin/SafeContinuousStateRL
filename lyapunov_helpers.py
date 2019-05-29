@@ -68,8 +68,9 @@ def cost(obs):
     #PHI_MAX = 0.1
     #PHI_DOT_MAX = 0.5
     
-    if x < 0 or phi < 0:
-        return 1
+    #if x < 0 or phi < 0:
+    #    return 1
+    if x > 0: return 1
     
     #if np.any(np.abs([x, x_dot, phi, phi_dot]) > [X_MAX, X_DOT_MAX, PHI_MAX, PHI_DOT_MAX]):
     #    return 1
@@ -169,12 +170,6 @@ def plot_performance(r, c):
     #plt.savefig('sdqn.eps', bbox_inches = 'tight')
     plt.legend()
     plt.show()
-
-def print_info(rollout):
-    _,a_,r_,_,_,c_ = zip(*rollout)
-    print('Mean action: %.2f' % np.mean(a_))
-    print('Total reward: %d' % np.sum(r_))
-    print('Total cost: %d' % np.sum(c_))
 
 def plot_decay(eps_decay):
     plt.title('Epsilon greedy decay')
