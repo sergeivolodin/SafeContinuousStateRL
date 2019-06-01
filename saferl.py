@@ -1,4 +1,7 @@
+from tqdm import tqdm
+from IPython.display import clear_output
 import tensorflow as tf
+from matplotlib import pyplot as plt
 import gym
 from costs import *
 
@@ -75,7 +78,35 @@ class ConstrainedEpisodicTrainLoop():
         """" Initialize for env, agent and number episodes before calls to train() """
         self.env = env
         self.agent = agent
-        self.episodes_to_collect = 5
+        self.episodes_to_collect = episodes_to_collect
+
+    def achieve_reward(self, R_thresh, max_epochs, do_plot = False):
+        """ Train until a reward is achieved """
+        Rs, Cs = [], []
+        for i in tqdm(range(max_epochs)):
+            # training
+            rollouts, _ = self.train_step()
+
+            # obtaining mean reward/constraint over batches
+            R = np.mean([np.sum(r[1]) for r in rollouts])
+            C = np.mean([np.sum(r[2]) for r in rollouts])
+
+            Rs.append(R)
+            Cs.append(C)
+
+            # plotting if requested
+            if i > 0 and i % 100 == 0 and do_plot:
+                plot_RC(Rs, Cs)
+
+            # stopping on success
+            if R >= R_thresh:
+                break
+
+        # plotting for the last time
+        if do_plot: plot_RC(Rs, Cs)
+
+        # return rewards/constraints
+        return Rs, Cs
 
     def train_step(self):
         """ Train once """
@@ -83,12 +114,15 @@ class ConstrainedEpisodicTrainLoop():
         # informing the agent about incoming data
         self.agent.train_start()
 
+        # data for rollouts
+        rollouts = []
+
         # doing the interaction
         for i in range(self.episodes_to_collect):
-            self.rollout()
+            rollouts.append(self.rollout())
 
         # training the agent
-        return self.agent.train()
+        return rollouts, self.agent.train()
 
     def rollout(self):
         """ Run agent-environment interaction once """
@@ -147,3 +181,29 @@ def discount(rewards, gamma):
         sum_so_far = sum_so_far * gamma + r
         rewards_so_far.append(sum_so_far)
     return rewards_so_far[::-1]
+
+def discount_many(r, d, gamma):
+    """ Discount rewards from many episodes
+        r: all rewards
+        d: done (1 or 0)
+    """
+    assert len(r) == len(d), "Length of rewards must be the same as length of done"
+    buffer = []
+    result = []
+    for r_, d_ in zip(r, d):
+        buffer.append(r_)
+        if d_: # if episode ended...
+            result += discount(buffer, gamma)
+            buffer = []
+    return result
+assert discount_many
+
+assert discount_many(r = [1,1,1,1,1,1], gamma = 0.5, d = [0,0,0,1,0,1]) == [1.875, 1.75, 1.5, 1.0, 1.5, 1.0]
+
+def plot_RC(Rs, Cs):
+    """ Plot rewards/costs """
+    clear_output()
+    plt.plot(Rs, label = 'rewards')
+    plt.plot(Cs, label = 'constraints')
+    plt.legend()
+    plt.show()

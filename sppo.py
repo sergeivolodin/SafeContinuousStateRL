@@ -3,7 +3,7 @@ from saferl import *
 
 class ConstrainedProximalPolicyOptimization(ConstrainedAgent):
     """ An RL agent for CMDPs which does random action choices """
-    def __init__(self, env, sess, epsilon = 0.1, delta = 0.01):
+    def __init__(self, env, sess, epsilon = 0.1, delta = 0.01, ignore_constraint = False):
         """ Initialize for environment
              eps: policy clipping
              delta: when to stop iterations, max KL-divergence
@@ -121,12 +121,23 @@ class ConstrainedProximalPolicyOptimization(ConstrainedAgent):
         # OPTIMIZING after saving theta to theta_0
         with tf.control_dependencies([self.op_save_to0]):
             self.op_opt1 = tf.train.AdamOptimizer(0.001).minimize(self.t_L1)
-            self.op_opt2 = tf.train.AdamOptimizer(0.001).minimize(self.t_L2)
+            self.op_opt2 = tf.train.AdamOptimizer(0.01).minimize(self.t_L2)
             # one learning iteration
             self.op_opt_step = tf.group([self.op_opt1, self.op_opt2])
 
+        # list of metrics to track
+        self.metrics = []
+
+        # buffer for experience
+        self.buffer = []
+
+        # doing unsafe if there is this flag
+        if ignore_constraint:
+            self.op_step = self.op_opt_step
+            return
+
         # non-zero denominator
-        eps_ = 1e-5
+        eps_ = 1e-5        
 
         # assigning theta projection after optimizing
         with tf.control_dependencies([self.op_opt_step]):
@@ -143,16 +154,9 @@ class ConstrainedProximalPolicyOptimization(ConstrainedAgent):
 
         self.op_step = tf.group([self.op_save_to0, self.op_opt_step, self.op_project_step])
         #step = opt_step
-        
-        # list of metrics to track
-        self.metrics = []
-
-        # buffer for experience
-        self.buffer = []
 
 
     def sample_action(self, observation):
-        print(observation)
         """ Sample an action given observation, typically runs on a GPU """
         p = self.sess.run(self.t_logits_policy, feed_dict = {self.p_states: [observation]})[0]
         return np.random.choice(range(self.n_actions), p = p)
@@ -186,7 +190,7 @@ class ConstrainedProximalPolicyOptimization(ConstrainedAgent):
         
         # creating a feed dict for TF
         feed_dict = {self.p_states: S, self.p_actions: A, self.p_rewards: R,
-            self.p_discounted_rewards_to_go: discount(R, self.gamma), self.p_disc_costs: discount(C, self.gamma)}
+            self.p_discounted_rewards_to_go: discount_many(R, D, self.gamma), self.p_disc_costs: discount_many(C, D, self.gamma)}
             
         # running the train op
         result = self.sess.run([self.op_step] + self.metrics, feed_dict = feed_dict)
