@@ -40,3 +40,7 @@ def cos_similarity(at1, at2):
 def norm_fro_sq(x):
     """ Flatten and take squared norm """
     return tf.reduce_sum(tf.square(x))
+
+def trainable_of(loss):
+    """ Get trainable variables on which loss depends """
+    return [x for x in tf.trainable_variables() if tf.gradients(loss, [x])[0] is not None]

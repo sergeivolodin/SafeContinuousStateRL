@@ -3,17 +3,21 @@ from saferl import *
 
 class ConstrainedProximalPolicyOptimization(ConstrainedAgent):
     """ An RL agent for CMDPs which does random action choices """
-    def __init__(self, env, sess, epsilon = 0.1, delta = 0.01, ignore_constraint = False, steps = 1):
+    def __init__(self, env, sess, epsilon = 0.1, delta = 0.01, ignore_constraint = False, steps = 1, lr_policy = 0.01, lr_value = 0.01):
         """ Initialize for environment
              eps: policy clipping
              delta: when to stop iterations, max KL-divergence (not implemented yet)
              steps: number of steps to take in train()
+             lr_policy: parameter for Adam (policy opt)
+             lr_value: value network learning rate for SGD
         """
         super(ConstrainedProximalPolicyOptimization, self).__init__(env)
         self.epsilon = epsilon
         self.delta = delta
         self.sess = sess
         self.steps = steps
+        self.lr_policy = lr_policy
+        self.lr_value = lr_value
 
         def g(eps, A):
             """ function g(eps, A), see PPO def. above """
@@ -38,6 +42,9 @@ class ConstrainedProximalPolicyOptimization(ConstrainedAgent):
 
         # discounted rewards obtained
         self.p_discounted_rewards_to_go = tf.placeholder(tf.float64, shape = (None,))
+
+        # constraint return
+        self.p_constraint_return = tf.placeholder(tf.float64)
 
         # state is an input to the network
         z = self.p_states
@@ -88,10 +95,10 @@ class ConstrainedProximalPolicyOptimization(ConstrainedAgent):
         self.t_L1 = -tf.reduce_mean(tf.minimum(part1, part2))
 
         # discounted constraint return
-        self.t_J_C = self.p_disc_costs[0]
+        self.t_J_C = self.p_constraint_return#self.p_disc_costs[0]
 
         # all parameters
-        self.params = tf.trainable_variables()
+        self.params = trainable_of(self.t_L1 + self.t_L2)
 
         # taken logits log
         self.t_log_logits = tf.log(self.t_logits_taken)
@@ -122,8 +129,8 @@ class ConstrainedProximalPolicyOptimization(ConstrainedAgent):
 
         # OPTIMIZING after saving theta to theta_0
         with tf.control_dependencies([self.op_save_to0]):
-            self.op_opt1 = tf.train.AdamOptimizer(0.001).minimize(self.t_L1)
-            self.op_opt2 = tf.train.AdamOptimizer(0.01).minimize(self.t_L2)
+            self.op_opt1 = tf.train.GradientDescentOptimizer(self.lr_policy).minimize(self.t_L1)
+            self.op_opt2 = tf.train.GradientDescentOptimizer(self.lr_value).minimize(self.t_L2)
             # one learning iteration
             self.op_opt_step = tf.group([self.op_opt1, self.op_opt2])
 
@@ -139,7 +146,7 @@ class ConstrainedProximalPolicyOptimization(ConstrainedAgent):
             return
 
         # non-zero denominator
-        eps_ = 1e-5        
+        eps_ = 1e-3
 
         # assigning theta projection after optimizing
         with tf.control_dependencies([self.op_opt_step]):
@@ -190,9 +197,15 @@ class ConstrainedProximalPolicyOptimization(ConstrainedAgent):
         # unpacking the data from the buffer...
         S, A, R, C, D = zip(*self.buffer)
         
+        # calculating constraint return...
+        constraint_return = estimate_constraint_return(C, D, self.gamma)
+
+      #  print("Estimated return from %s %s: %d" % (str(C), str(D), constraint_return))
+
         # creating a feed dict for TF
         feed_dict = {self.p_states: S, self.p_actions: A, self.p_rewards: R,
-            self.p_discounted_rewards_to_go: discount_many(R, D, self.gamma), self.p_disc_costs: discount_many(C, D, self.gamma)}
+            self.p_discounted_rewards_to_go: discount_many(R, D, self.gamma), self.p_disc_costs: discount_many(C, D, self.gamma),
+            self.p_constraint_return: constraint_return}
 
         for i in range(self.steps):            
             # running the train op

@@ -96,14 +96,14 @@ class ConstrainedEpisodicTrainLoop():
 
             # plotting if requested
             if i > 0 and i % 100 == 0 and do_plot:
-                plot_RC(Rs, Cs)
+                plot_RC(Rs, Cs, self.env.threshold)
 
             # stopping on success
             if R >= R_thresh:
                 break
 
         # plotting for the last time
-        if do_plot: plot_RC(Rs, Cs)
+        if do_plot: plot_RC(Rs, Cs, self.env.threshold)
 
         # return rewards/constraints
         return Rs, Cs
@@ -200,10 +200,22 @@ assert discount_many
 
 assert discount_many(r = [1,1,1,1,1,1], gamma = 0.5, d = [0,0,0,1,0,1]) == [1.875, 1.75, 1.5, 1.0, 1.5, 1.0]
 
-def plot_RC(Rs, Cs):
+def plot_RC(Rs, Cs, threshold):
     """ Plot rewards/costs """
     clear_output()
-    plt.plot(Rs, label = 'rewards')
-    plt.plot(Cs, label = 'constraints')
+    plt.plot(Rs, label = 'rewards', color = 'green')
+    plt.plot(Cs, label = 'constraints', color = 'red')
+    plt.axhline(y = threshold, ls = '--', color = 'red')
     plt.legend()
     plt.show()
+
+def estimate_constraint_return(C, D, gamma):
+    """ Estimate constraint return from constraints (array) and Done array """
+    returns = []
+    current = []
+    for c, d in zip(C, D):
+        current.append(c)
+        if d:
+            returns.append(discount(current, gamma)[0])
+            current = []
+    return np.mean(returns)
