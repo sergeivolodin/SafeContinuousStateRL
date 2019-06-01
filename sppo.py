@@ -3,15 +3,17 @@ from saferl import *
 
 class ConstrainedProximalPolicyOptimization(ConstrainedAgent):
     """ An RL agent for CMDPs which does random action choices """
-    def __init__(self, env, sess, epsilon = 0.1, delta = 0.01, ignore_constraint = False):
+    def __init__(self, env, sess, epsilon = 0.1, delta = 0.01, ignore_constraint = False, steps = 1):
         """ Initialize for environment
              eps: policy clipping
-             delta: when to stop iterations, max KL-divergence
+             delta: when to stop iterations, max KL-divergence (not implemented yet)
+             steps: number of steps to take in train()
         """
         super(ConstrainedProximalPolicyOptimization, self).__init__(env)
         self.epsilon = epsilon
         self.delta = delta
         self.sess = sess
+        self.steps = steps
 
         def g(eps, A):
             """ function g(eps, A), see PPO def. above """
@@ -191,9 +193,10 @@ class ConstrainedProximalPolicyOptimization(ConstrainedAgent):
         # creating a feed dict for TF
         feed_dict = {self.p_states: S, self.p_actions: A, self.p_rewards: R,
             self.p_discounted_rewards_to_go: discount_many(R, D, self.gamma), self.p_disc_costs: discount_many(C, D, self.gamma)}
-            
-        # running the train op
-        result = self.sess.run([self.op_step] + self.metrics, feed_dict = feed_dict)
+
+        for i in range(self.steps):            
+            # running the train op
+            result = self.sess.run([self.op_step] + self.metrics, feed_dict = feed_dict)
         
         # returning the result (all but step)
         return result[1:]

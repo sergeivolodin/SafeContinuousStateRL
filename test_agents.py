@@ -9,7 +9,7 @@ def test_random():
     agent = ConstrainedRandomAgent(env)
     loop = ConstrainedEpisodicTrainLoop(env, agent)
     loop.rollout()
-    assert loop.train_step() == True, "Random agent must return True on training"
+    assert loop.train_step()[1] == True, "Random agent must return True on training"
 
 def test_sppo():
     """ Test that sPPO can be created """
@@ -26,7 +26,7 @@ def test_convergence_unsafe(R_thresh = 180, epochs = 10000):
     """ Test that PPO converges (threshold reached in fixed number of epochs) """
     env = make_safe_env('CartPole-v0-left-half')
     sess = create_modest_session()
-    agent = ConstrainedProximalPolicyOptimization(env, sess, ignore_constraint = True)
+    agent = ConstrainedProximalPolicyOptimization(env, sess, ignore_constraint = True, steps = 5)
     loop = ConstrainedEpisodicTrainLoop(env, agent, episodes_to_collect = 10)
 
     # RL algos can diverge after finding a solution
