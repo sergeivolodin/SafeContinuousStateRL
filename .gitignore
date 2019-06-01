@@ -1,3 +1,7 @@
+*.pyc
+gym-results
+.cache
+.idea
 checkpoint
 __pycache__
 *.ckpt*

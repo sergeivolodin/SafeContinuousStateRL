@@ -3,23 +3,24 @@ from saferl import *
 
 class ConstrainedProximalPolicyOptimization(ConstrainedAgent):
     """ An RL agent for CMDPs which does random action choices """
-    def __init__(self, env, sess, epsilon = 0.1):
+    def __init__(self, env, sess, epsilon = 0.1, delta = 0.01):
         """ Initialize for environment
              eps: policy clipping
              delta: when to stop iterations, max KL-divergence
         """
-        super(ConstrainedRandomAgent, self).__init__(env)
+        super(ConstrainedProximalPolicyOptimization, self).__init__(env)
         self.epsilon = epsilon
         self.delta = delta
+        self.sess = sess
 
         def g(eps, A):
             """ function g(eps, A), see PPO def. above """
             def step_fcn(x):
                 return (tf.math.sign(x) + 1) / 2.
-            return tf.multiply(step_fcn(A), A * (1 + epsilon)) + tf.multiply(step_fcn(-A), A * (1 - epsilon))
+            return tf.multiply(step_fcn(A), A * (1 + self.epsilon)) + tf.multiply(step_fcn(-A), A * (1 - self.epsilon))
 
         # states
-        self.p_states = tf.placeholder(tf.float64, shape = (None, S_DIM,))
+        self.p_states = tf.placeholder(tf.float64, shape = (None, self.state_dim,))
 
         # taken actions
         self.p_actions = tf.placeholder(tf.int64, shape = (None,))
@@ -49,103 +50,111 @@ class ConstrainedProximalPolicyOptimization(ConstrainedAgent):
         with tf.name_scope('policy_layers'):
             #z = fc_layer(z, 10)
             z_policy = fc_layer(z, 10)
-            z_policy = fc_layer(z_policy, ACTIONS, activation = None)
+            z_policy = fc_layer(z_policy, self.n_actions, activation = None)
             self.t_logits_policy = tf.nn.softmax(z_policy)
             # predicted labels
-            self.t_labels = tf.argmax(logits_policy, axis = 1)
+            self.t_labels = tf.argmax(self.t_logits_policy, axis = 1)
     
         # VALUE network head
         with tf.name_scope('value_layers'):
             z_value = fc_layer(z, 10)
             self.t_value = fc_layer(z_value, 1, activation = None)
 
-# next value
-value_next = tf.concat([value[1:, :], [[0]]], axis = 0)
+        # next value
+        self.t_value_next = tf.concat([self.t_value[1:, :], [[0]]], axis = 0)
 
-# advantage function
-advantage = rewards + tf.reshape(gamma_discount * value_next - value, (-1,))
+        # advantage function
+        self.t_advantage = self.p_rewards + tf.reshape(self.gamma * self.t_value_next - self.t_value, (-1,))
 
-# Loss 2
-L2 = tf.reduce_mean(tf.square(tf.reshape(value, (-1,)) - discounted_rewards_to_go))
+        # Loss 2
+        self.t_L2 = tf.reduce_mean(tf.square(tf.reshape(self.t_value, (-1,)) - self.p_discounted_rewards_to_go))
 
-# one-hot encoded actions
-a_one_hot = tf.one_hot(actions, ACTIONS)
+        # one-hot encoded actions
+        self.t_a_one_hot = tf.one_hot(self.p_actions, self.n_actions)
 
-# taken logits
-#logits_taken = tf.gather(logits, actions, axis = 1)
-logits_taken = tf.boolean_mask(logits_policy, a_one_hot)
+        # taken logits
+        #logits_taken = tf.gather(logits, actions, axis = 1)
+        self.t_logits_taken = tf.boolean_mask(self.t_logits_policy, self.t_a_one_hot)
 
-# pi_theta / pi_theta_k
-pi_theta_pi_thetak = tf.divide(logits_taken, tf.stop_gradient(logits_taken))
-advantage_nograd = tf.stop_gradient(advantage)
-part1 = tf.multiply(pi_theta_pi_thetak, advantage_nograd)
-part2 =                      g(epsilon, advantage_nograd)
+        # pi_theta / pi_theta_k
+        pi_theta_pi_thetak = tf.divide(self.t_logits_taken, tf.stop_gradient(self.t_logits_taken))
+        advantage_nograd = tf.stop_gradient(self.t_advantage)
+        part1 = tf.multiply(pi_theta_pi_thetak, advantage_nograd)
+        part2 =                      g(self.epsilon, advantage_nograd)
 
-# calculated loss
-L1 = -tf.reduce_mean(tf.minimum(part1, part2))
+        # calculated loss
+        self.t_L1 = -tf.reduce_mean(tf.minimum(part1, part2))
 
-# discounted constraint return
-J_C = disc_costs[0]
+        # discounted constraint return
+        self.t_J_C = self.p_disc_costs[0]
 
-# all parameters
-params = tf.trainable_variables()
+        # all parameters
+        self.params = tf.trainable_variables()
 
-# taken logits log
-log_logits = tf.log(logits_taken)
+        # taken logits log
+        self.t_log_logits = tf.log(self.t_logits_taken)
 
-# constraint function for reward min
-constraint_return_int = tf.reduce_sum(tf.multiply(log_logits, disc_costs))
+        # constraint function for reward min
+        self.t_constraint_return_int = tf.reduce_sum(tf.multiply(self.t_log_logits, self.p_disc_costs))
 
-# gradient of the CONSTRAINT
-g_C = tf.gradients(constraint_return_int, params)
+        # gradient of the CONSTRAINT
+        self.t_g_C = tf.gradients(self.t_constraint_return_int, self.params)
 
-# gradient of the REWARD (PPO function)
-g_R = tf.gradients(-L1, params)
+        # gradient of the REWARD (PPO function)
+        self.t_g_R = tf.gradients(-self.t_L1, self.params)
 
-# goal to constraint gradient cosine
-RtoC = cos_similarity(g_C, g_R)
+        # goal to constraint gradient cosine
+        self.t_RtoC = cos_similarity(self.t_g_C, self.t_g_R)
 
-# TOTAL LOSS
-loss = L1 + L2
+        # TOTAL LOSS
+        self.t_loss = self.t_L1 + self.t_L2
 
-# variable BEFORE the step
-theta_0 = [tf.Variable(tf.zeros_like(p)) for p in params]
+        # variable BEFORE the step
+        self.t_theta_0 = [tf.Variable(tf.zeros_like(p), trainable = False) for p in self.params]
 
-# current parameters
-theta_1 = params
+        # current parameters
+        self.t_theta_1 = self.params
 
-# save theta1 -> theta0
-save_to0 = tf.group([a.assign(b) for a, b in zip(theta_0, theta_1)])
+        # save theta1 -> theta0
+        self.op_save_to0 = tf.group([a.assign(b) for a, b in zip(self.t_theta_0, self.t_theta_1)])
 
-# OPTIMIZING after saving theta to theta_0
-with tf.control_dependencies([save_to0]):
-    opt1 = tf.train.AdamOptimizer(0.001).minimize(L1)
-    opt2 = tf.train.AdamOptimizer(0.001).minimize(L2)
-    # one learning iteration
-    opt_step = tf.group([opt1, opt2])
+        # OPTIMIZING after saving theta to theta_0
+        with tf.control_dependencies([self.op_save_to0]):
+            self.op_opt1 = tf.train.AdamOptimizer(0.001).minimize(self.t_L1)
+            self.op_opt2 = tf.train.AdamOptimizer(0.001).minimize(self.t_L2)
+            # one learning iteration
+            self.op_opt_step = tf.group([self.op_opt1, self.op_opt2])
 
-# non-zero denominator
-eps_ = 1e-5
+        # non-zero denominator
+        eps_ = 1e-5
 
-# assigning theta projection after optimizing
-with tf.control_dependencies([opt_step]):
-    
-    # SLACK to go
-    R = C_max - J_C + tf.reduce_sum(
-        [tf.reduce_sum(tf.multiply(t0 - t1, g)) for t0, t1, g in zip(theta_0, theta_1, g_C) if g is not None])
+        # assigning theta projection after optimizing
+        with tf.control_dependencies([self.op_opt_step]):
+            
+            # SLACK to go
+            self.t_R = self.threshold - self.t_J_C + tf.reduce_sum(
+                [tf.reduce_sum(tf.multiply(t0 - t1, g)) for t0, t1, g in zip(self.t_theta_0, self.t_theta_1, self.t_g_C) if g is not None])
 
-    # negative number if violated, zero if OK
-    R_clipped = -tf.nn.relu(-R)
-    
-    project_step = tf.group([t.assign(t + g * R_clipped / (eps_ + norm_fro_sq(g))) for t, g in zip(params, g_C) if g is not None])
+            # negative number if violated, zero if OK
+            self.t_R_clipped = -tf.nn.relu(-self.t_R)
+            
+            # projection
+            self.op_project_step = tf.group([t.assign(t + g * self.t_R_clipped / (eps_ + norm_fro_sq(g))) for t, g in zip(self.params, self.t_g_C) if g is not None])
 
-step = tf.group([save_to0, opt_step, project_step])
-#step = opt_step
+        self.op_step = tf.group([self.op_save_to0, self.op_opt_step, self.op_project_step])
+        #step = opt_step
+        
+        # list of metrics to track
+        self.metrics = []
+
+        # buffer for experience
+        self.buffer = []
 
 
     def sample_action(self, observation):
+        print(observation)
         """ Sample an action given observation, typically runs on a GPU """
-        p = self.sess.run(self.p_logits_policy, feed_dict = {self.t_states: [observation]})[0]
+        p = self.sess.run(self.t_logits_policy, feed_dict = {self.p_states: [observation]})[0]
         return np.random.choice(range(self.n_actions), p = p)
 
     def episode_start(self):
@@ -156,15 +165,32 @@ step = tf.group([save_to0, opt_step, project_step])
         """ Called each time an episode ends """
         pass
 
-    def process_feedback(self, state, reward, cost, state_new, done, info):
+    def process_feedback(self, state, action, reward, cost, state_new, done, info):
         """ Called inside the train loop, typically just stores the data """
+        self.buffer.append((state, action, reward, cost, done))
         pass
 
     def train_start(self):
         """ Called before one training phase """
+        self.buffer = []
         pass
+        
+    def track_metrics(self, lst):
+        """ Track all metrics from the list """
+        self.metrics = lst
 
     def train(self):
         """ Train method, typically runs on a GPU """
-        pass
+        # unpacking the data from the buffer...
+        S, A, R, C, D = zip(*self.buffer)
+        
+        # creating a feed dict for TF
+        feed_dict = {self.p_states: S, self.p_actions: A, self.p_rewards: R,
+            self.p_discounted_rewards_to_go: discount(R, self.gamma), self.p_disc_costs: discount(C, self.gamma)}
+            
+        # running the train op
+        result = self.sess.run([self.op_step] + self.metrics, feed_dict = feed_dict)
+        
+        # returning the result (all but step)
+        return result[1:]
 

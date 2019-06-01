@@ -19,11 +19,11 @@ class ConstrainedEnvironment():
 
     def reset(self):
         """ Reset the environment """
-        self.env.reset()
+        return self.env.reset()
 
     def render(self):
         """ Render current state """
-        self.env.render()
+        return self.env.render()
 
     def step(self, action):
         """ Take an action and return obs, rew, cost, done, info """
@@ -32,7 +32,7 @@ class ConstrainedEnvironment():
 
     def close(self):
         """ Close the gym environment """
-        self.env.close()
+        return self.env.close()
 
 class ConstrainedAgent():
     """ An RL agent for constrained MDPs with discrete actions and continuous states """
@@ -42,6 +42,8 @@ class ConstrainedAgent():
         assert len(env.observation_space.shape) == 1, "Only support 1D actions """
         self.state_dim = env.observation_space.shape[0]
         self.n_actions = env.action_space.n
+        self.gamma = env.gamma
+        self.threshold = env.threshold
 
     def sample_action(self, observation):
         """ Sample an action given observation, typically runs on a GPU """
@@ -55,7 +57,7 @@ class ConstrainedAgent():
         """ Called each time an episode ends """
         raise NotImplementedError("Trying to call an abstract class method")
 
-    def process_feedback(self, state, reward, cost, state_new, done, info):
+    def process_feedback(self, state, action, reward, cost, state_new, done, info):
         """ Called inside the train loop, typically just stores the data """
         raise NotImplementedError("Trying to call an abstract class method")
 
@@ -86,7 +88,7 @@ class ConstrainedEpisodicTrainLoop():
             self.rollout()
 
         # training the agent
-        self.agent.train()
+        return self.agent.train()
 
     def rollout(self):
         """ Run agent-environment interaction once """
@@ -111,7 +113,7 @@ class ConstrainedEpisodicTrainLoop():
             C.append(cost)
 
             # informing the agent
-            self.agent.process_feedback(obs, rew, cost, obs_, done, info)
+            self.agent.process_feedback(obs, act, rew, cost, obs_, done, info)
 
             # if finished, informing the agent
             if done: self.agent.episode_end()
@@ -137,11 +139,11 @@ def make_safe_env(env_name, **kwargs):
 
     return ConstrainedEnvironment(env_unsafe, cost, threshold, **kwargs)
 
-def discount(rewards):
+def discount(rewards, gamma):
     """ Discount and do cumulative sum """
     sum_so_far = 0.0
     rewards_so_far = []
     for r in rewards[::-1]:
-        sum_so_far = sum_so_far * gamma_discount + r
+        sum_so_far = sum_so_far * gamma + r
         rewards_so_far.append(sum_so_far)
     return rewards_so_far[::-1]

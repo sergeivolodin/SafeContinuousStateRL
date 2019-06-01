@@ -8,6 +8,7 @@ class ConstrainedRandomAgent(ConstrainedAgent):
 
     def sample_action(self, observation):
         """ Sample an action given observation, typically runs on a GPU """
+        assert observation is not None
         return np.random.choice(self.n_actions)
 
     def episode_start(self):
@@ -18,7 +19,7 @@ class ConstrainedRandomAgent(ConstrainedAgent):
         """ Called each time an episode ends """
         pass
 
-    def process_feedback(self, state, reward, cost, state_new, done, info):
+    def process_feedback(self, state, action, reward, cost, state_new, done, info):
         """ Called inside the train loop, typically just stores the data """
         pass
 
@@ -28,5 +29,6 @@ class ConstrainedRandomAgent(ConstrainedAgent):
 
     def train(self):
         """ Train method, typically runs on a GPU """
+        return True
         pass
 
