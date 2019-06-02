@@ -94,14 +94,14 @@ class ConstrainedEpisodicTrainLoop():
         self.agent = agent
         self.episodes_to_collect = episodes_to_collect
 
-    def achieve_reward(self, R_thresh, max_epochs, plot_every = 100):
+    def achieve_reward(self, R_thresh, max_epochs, plot_every = 100, fig_name = 'fig.pdf'):
         """ Train until a reward is achieved """
         Rs = [] # results
 
         def plot_all():
             """ Plot current results """
             d = arr_of_dicts_to_dict_of_arrays(Rs)
-            plot_RC(d, self.env.threshold)
+            plot_RC(d, self.env.threshold, fig_name)
 
         for i in tqdm(range(max_epochs)):
             # training
@@ -226,9 +226,10 @@ def is_number(x):
     """ Check if the argument is a number (python/numpy) """
     return isinstance(x, float) or isinstance(x, int) or isinstance(x, np.floating)
 
-def plot_RC(Rs, threshold):
+def plot_RC(Rs, threshold, fig_name):
     """ Plot rewards/costs/other """
     clear_output()
+    plt.figure()
     # hardcoded colors
     colors = {'Reward': 'green', 'Cost': 'red'}
     unused_colors = ['b', 'c', 'm', 'y', 'k', 'gray']
@@ -253,6 +254,7 @@ def plot_RC(Rs, threshold):
             plt.fill_between(xs, mean - std, mean + std, alpha = 0.3, color = color)
             plt.fill_between(xs, min_, max_, alpha = 0.1, color = color)
     plt.legend()
+    plt.savefig(fig_name, bbox_inches = 'tight')
     plt.show()
 
 def estimate_constraint_return(C, D, gamma):

@@ -131,7 +131,7 @@ class ConstrainedProximalPolicyOptimization(ConstrainedAgent):
         def get_optimizers(deps):
             # OPTIMIZING after saving theta to theta_0
             with tf.control_dependencies(deps):
-                op_opt1 = tf.train.GradientDescentOptimizer(self.lr_policy).minimize(self.t_L1)
+                op_opt1 = tf.train.AdamOptimizer(self.lr_policy).minimize(self.t_L1)
                 op_opt2 = tf.train.GradientDescentOptimizer(self.lr_value).minimize(self.t_L2)
                 # one learning iteration
             op_opt_step = tf.group([op_opt1, op_opt2])

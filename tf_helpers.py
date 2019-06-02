@@ -4,8 +4,8 @@ import numpy as np
 
 def create_modest_session():
   # only using device 0
-  os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"   # see issue #152
-  os.environ["CUDA_VISIBLE_DEVICES"]="0"
+#  os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"   # see issue #152
+#  os.environ["CUDA_VISIBLE_DEVICES"]="0"
 
   tf.reset_default_graph()
   # allowing GPU memory growth to allocate only what we need
@@ -15,7 +15,7 @@ def create_modest_session():
   sess = tf.Session(config=config, graph = tf.get_default_graph())
   return sess
 
-def fc_layer(x, n, activation = tf.nn.relu, name = 'fc'):
+def fc_layer(x, n, activation = tf.nn.sigmoid, name = 'fc'):
     """ Fully connected layer for input x and output dim n """
     return tf.identity(tf.contrib.layers.fully_connected(x, n, activation_fn=activation,
     weights_initializer=tf.initializers.lecun_normal(), weights_regularizer=None,
@@ -119,7 +119,7 @@ def CatVariable(shapes, initializer):
 
 class FCModelConcat():
     """ Fully-connected network with all weights in one tensor """
-    def __init__(self, layer_shapes, activation = tf.nn.relu, initializer = tf.random.truncated_normal):
+    def __init__(self, layer_shapes, activation = tf.nn.sigmoid, initializer = tf.random.truncated_normal):
         """ Initialize with N_neurons (w/o input layer) """
         self.layer_shapes = layer_shapes
 

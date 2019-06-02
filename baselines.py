@@ -6,7 +6,7 @@ import numpy as np
 
 class ConstrainedRandomAgent(ConstrainedAgent):
     """ An RL agent for CMDPs which does random action choices """
-    def __init__(self, env):
+    def __init__(self, env, *args, **kwargs):
         """ Initialize for environment """
         super(ConstrainedRandomAgent, self).__init__(env)
 
@@ -38,9 +38,10 @@ class ConstrainedRandomAgent(ConstrainedAgent):
 
 class ConstrainedPolicyOptimization(ConstrainedAgent):
     """ CPO agent """
-    def __init__(self, env, sess):
+    def __init__(self, env, sess, delta = 0.01):
         """ Initialize for environment """
         super(ConstrainedPolicyOptimization, self).__init__(env)
+        self.delta = delta
 
         self.sess = sess
 
@@ -90,8 +91,8 @@ class ConstrainedPolicyOptimization(ConstrainedAgent):
         self.log_logits = tf.log(self.logits_taken)
 
         # calculated loss
-        self.loss_r = -tf.reduce_sum(tf.multiply(self.log_logits, self.disc_rewards))
-        self.loss_c = -tf.reduce_sum(tf.multiply(self.log_logits, self.disc_costs))
+        self.loss_r = -tf.reduce_mean(tf.multiply(self.log_logits, self.disc_rewards))
+        self.loss_c = -tf.reduce_mean(tf.multiply(self.log_logits, self.disc_costs))
 
         # KL(pi(a)||pi(a) fixed)
         self.kl_div_var_fixed = tf.reduce_mean(tfp.distributions.kl_divergence(
@@ -212,5 +213,5 @@ class ConstrainedPolicyOptimization(ConstrainedAgent):
             return np.array(H_), np.array([b_]).T, np.array([g_]).T, J_R, J_C
 
         H_, b_, g_, J_R, J_C = get_HbgRC(self.buffer)
-        solve_CPO(H_, b_, g_, J_R, J_C, delta = 0.01, d = self.threshold, H_lambda = 0.01)
+        solve_CPO(H_, b_, g_, J_R, J_C, delta = self.delta, d = self.threshold, H_lambda = 0.01)
         return {}
