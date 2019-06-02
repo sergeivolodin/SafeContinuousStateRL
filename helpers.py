@@ -17,6 +17,7 @@ def set_big_font():
 # folder with .sh scripts and .output files
 output_folder = "./output/"
 figures_folder = "./output/figures/"
+run_in_parallel = 20
 
 def varying_for_agent(d):
     """ What changes for optimizer? """
@@ -68,20 +69,20 @@ def write_sh_file(setting_name, parameters, common, delay = None):
     it = 0
     write_to_out('#!/bin/bash')
     for params in parameters:
-        if it % 4 == 0:
+        if it % run_in_parallel == 0:
             write_to_out('pids=""')
         write_to_out(print_one(**params))
         #print('echo aba; sleep 3 &')
         write_to_out('pids="$pids $!"')
 
-        if it % 4 == 3:
+        if it % run_in_parallel == run_in_parallel - 1:
             write_to_out('wait $pids')
         write_to_out('sleep %.2f' % delay)
         it += 1
     write_to_out('wait $pids')
     it = len(parameters)
     print('Total train stages: ', it * common['repetitions'])
-    print('Total time, hours (approx): ', common['repetitions'] * 5 * it / 4 / 60)
+    print('Total time, hours (approx): ', common['repetitions'] * 5 * it / run_in_parallel / 60)
     print('OUTPUT: ' + fn)
 
     out.close()

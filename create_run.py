@@ -14,7 +14,7 @@ args = parser.parse_args()
 
 ### Choosing a setting
 setting = args.setting
-settings = {'small': small_setting}
+settings = {'small': small_setting, 'medium': medium_setting}
 assert setting in settings, "Please supply a valid setting, one of: " + str(settings.keys())
 R = settings[setting]()
 
