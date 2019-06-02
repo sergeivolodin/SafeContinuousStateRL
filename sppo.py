@@ -35,7 +35,7 @@ class ConstrainedProximalPolicyOptimization(ConstrainedAgent):
         self.p_rewards = tf.placeholder(tf.float64, shape = (None,), name = 'rewards')
 
         # maximal constraint return
-        self.p_threshold = tf.placeholder(tf.float64, name = 'c_threshold')
+        self.p_threshold = tf.placeholder(tf.float64, shape = (), name = 'c_threshold')
 
         # costs obtained
         self.p_disc_costs = tf.placeholder(tf.float64, shape = (None,), name = 'discounted_costs')
@@ -44,7 +44,7 @@ class ConstrainedProximalPolicyOptimization(ConstrainedAgent):
         self.p_discounted_rewards_to_go = tf.placeholder(tf.float64, shape = (None,), name = 'discounted_rewards_to_go')
 
         # constraint return
-        self.p_constraint_return = tf.placeholder(tf.float64, name = 'constraint_return')
+        self.p_constraint_return = tf.placeholder(tf.float64, shape = (), name = 'constraint_return')
 
         # state is an input to the network
         z = self.p_states
@@ -104,7 +104,7 @@ class ConstrainedProximalPolicyOptimization(ConstrainedAgent):
         self.t_log_logits = tf.log(self.t_logits_taken, name = 'log_logits')
 
         # constraint function for reward min
-        self.t_constraint_return_int = tf.reduce_sum(tf.multiply(self.t_log_logits, self.p_disc_costs), name = 'constr_ret')
+        self.t_constraint_return_int = tf.reduce_sum(tf.multiply(self.t_log_logits, self.p_disc_costs), name = 'constr_ret_loss')
 
         # gradient of the CONSTRAINT
         self.t_g_C = tf.gradients(self.t_constraint_return_int, self.params, name = 'g_C')
@@ -205,5 +205,6 @@ class ConstrainedProximalPolicyOptimization(ConstrainedAgent):
             result = self.sess.run([self.op_step] + self.metrics, feed_dict = feed_dict)
         
         # returning the result (all but step)
-        return {x: y for x, y in zip(self.metrics, result[1:])}
+        #assert all([is_number(r) for r in result[1:]]), "Only support scalar metrics, but got " + str(result[1:])
+        return {x.name: np.mean(y) for x, y in zip(self.metrics, result[1:])}
 
