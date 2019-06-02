@@ -48,6 +48,9 @@ class ConstrainedAgent():
         self.gamma = env.gamma
         self.threshold = env.threshold
 
+        # list of metrics to track
+        self.metrics = []
+
     def sample_action(self, observation):
         """ Sample an action given observation, typically runs on a GPU """
         raise NotImplementedError("Trying to call an abstract class method")
@@ -69,8 +72,13 @@ class ConstrainedAgent():
         raise NotImplementedError("Trying to call an abstract class method")
 
     def train(self):
-        """ Train method, typically runs on a GPU """
+        """ Train method, typically runs on a GPU. Returns a dict with summary """
         raise NotImplementedError("Trying to call an abstract class method")
+
+    def track_metrics(self, lst):
+        """ Track all metrics from the list """
+        assert isinstance(lst, list), "Please provide a list"
+        self.metrics = lst
 
 class ConstrainedEpisodicTrainLoop():
     """ Loop agent-environment interaction for constrained env/agents """

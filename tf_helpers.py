@@ -14,11 +14,11 @@ def create_modest_session():
   sess = tf.Session(config=config, graph = tf.get_default_graph())
   return sess
 
-def fc_layer(x, n, activation = tf.nn.relu):
+def fc_layer(x, n, activation = tf.nn.relu, name = 'fc'):
     """ Fully connected layer for input x and output dim n """
-    return tf.contrib.layers.fully_connected(x, n, activation_fn=activation,
+    return tf.identity(tf.contrib.layers.fully_connected(x, n, activation_fn=activation,
     weights_initializer=tf.initializers.lecun_normal(), weights_regularizer=None,
-    biases_initializer=tf.zeros_initializer(), biases_regularizer=None, trainable=True)
+    biases_initializer=tf.zeros_initializer(), biases_regularizer=None, trainable=True), name = name)
 
 def concat_list(lst):
     """ Concatenate a list of tensors into a single 1D tensor """
@@ -28,14 +28,14 @@ def cos_similarity_vec(v1, v2, eps = 1e-7):
     """ Cosine similarity for vectors """
     return tf.tensordot(v1, v2, [[0], [0]]) / (tf.linalg.norm(v1) * tf.linalg.norm(v2) + eps)
 
-def cos_similarity(at1, at2):
+def cos_similarity(at1, at2, name = 'cos_sim'):
     """ Cosine similarity between two arrays of tensors of same length and shapes
         cosTheta = (a, b) / |a|_2|b|_2
     """
     # flattening lists of tensors
     at1_f = concat_list(at1)
     at2_f = concat_list(at2)
-    return cos_similarity_vec(at1_f, at2_f)
+    return tf.identity(cos_similarity_vec(at1_f, at2_f), name = name)
 
 def norm_fro_sq(x):
     """ Flatten and take squared norm """

@@ -26,25 +26,25 @@ class ConstrainedProximalPolicyOptimization(ConstrainedAgent):
             return tf.multiply(step_fcn(A), A * (1 + self.epsilon)) + tf.multiply(step_fcn(-A), A * (1 - self.epsilon))
 
         # states
-        self.p_states = tf.placeholder(tf.float64, shape = (None, self.state_dim,))
+        self.p_states = tf.placeholder(tf.float64, shape = (None, self.state_dim,), name = 'states')
 
         # taken actions
-        self.p_actions = tf.placeholder(tf.int64, shape = (None,))
+        self.p_actions = tf.placeholder(tf.int64, shape = (None,), name = 'actions')
 
         # rewards obtained
-        self.p_rewards = tf.placeholder(tf.float64, shape = (None,))
+        self.p_rewards = tf.placeholder(tf.float64, shape = (None,), name = 'rewards')
 
         # maximal constraint return
-        self.p_threshold = tf.placeholder(tf.float64)
+        self.p_threshold = tf.placeholder(tf.float64, name = 'c_threshold')
 
         # costs obtained
-        self.p_disc_costs = tf.placeholder(tf.float64, shape = (None,))
+        self.p_disc_costs = tf.placeholder(tf.float64, shape = (None,), name = 'discounted_costs')
 
         # discounted rewards obtained
-        self.p_discounted_rewards_to_go = tf.placeholder(tf.float64, shape = (None,))
+        self.p_discounted_rewards_to_go = tf.placeholder(tf.float64, shape = (None,), name = 'discounted_rewards_to_go')
 
         # constraint return
-        self.p_constraint_return = tf.placeholder(tf.float64)
+        self.p_constraint_return = tf.placeholder(tf.float64, name = 'constraint_return')
 
         # state is an input to the network
         z = self.p_states
@@ -60,39 +60,39 @@ class ConstrainedProximalPolicyOptimization(ConstrainedAgent):
             #z = fc_layer(z, 10)
             z_policy = fc_layer(z, 10)
             z_policy = fc_layer(z_policy, self.n_actions, activation = None)
-            self.t_logits_policy = tf.nn.softmax(z_policy)
+            self.t_logits_policy = tf.nn.softmax(z_policy, name = 'logits_policy')
             # predicted labels
             self.t_labels = tf.argmax(self.t_logits_policy, axis = 1)
     
         # VALUE network head
         with tf.name_scope('value_layers'):
             z_value = fc_layer(z, 10)
-            self.t_value = fc_layer(z_value, 1, activation = None)
+            self.t_value = fc_layer(z_value, 1, activation = None, name = 'value')
 
         # next value
-        self.t_value_next = tf.concat([self.t_value[1:, :], [[0]]], axis = 0)
+        self.t_value_next = tf.concat([self.t_value[1:, :], [[0]]], axis = 0, name = 'next_value')
 
         # advantage function
-        self.t_advantage = self.p_rewards + tf.reshape(self.gamma * self.t_value_next - self.t_value, (-1,))
+        self.t_advantage = tf.identity(self.p_rewards + tf.reshape(self.gamma * self.t_value_next - self.t_value, (-1,)), name = 'advantage')
 
         # Loss 2
-        self.t_L2 = tf.reduce_mean(tf.square(tf.reshape(self.t_value, (-1,)) - self.p_discounted_rewards_to_go))
+        self.t_L2 = tf.reduce_mean(tf.square(tf.reshape(self.t_value, (-1,)) - self.p_discounted_rewards_to_go), name = 'L2')
 
         # one-hot encoded actions
-        self.t_a_one_hot = tf.one_hot(self.p_actions, self.n_actions)
+        self.t_a_one_hot = tf.one_hot(self.p_actions, self.n_actions, name = 'a_one_hot')
 
         # taken logits
         #logits_taken = tf.gather(logits, actions, axis = 1)
-        self.t_logits_taken = tf.boolean_mask(self.t_logits_policy, self.t_a_one_hot)
+        self.t_logits_taken = tf.boolean_mask(self.t_logits_policy, self.t_a_one_hot, name = 'logits_taken')
 
         # pi_theta / pi_theta_k
-        pi_theta_pi_thetak = tf.divide(self.t_logits_taken, tf.stop_gradient(self.t_logits_taken))
+        pi_theta_pi_thetak = tf.divide(self.t_logits_taken, tf.stop_gradient(self.t_logits_taken), name = 'pi_pi_ratio')
         advantage_nograd = tf.stop_gradient(self.t_advantage)
         part1 = tf.multiply(pi_theta_pi_thetak, advantage_nograd)
         part2 =                      g(self.epsilon, advantage_nograd)
 
         # calculated loss
-        self.t_L1 = -tf.reduce_mean(tf.minimum(part1, part2))
+        self.t_L1 = tf.reduce_mean(-tf.minimum(part1, part2), name = 'L1')
 
         # discounted constraint return
         self.t_J_C = self.p_constraint_return#self.p_disc_costs[0]
@@ -101,19 +101,19 @@ class ConstrainedProximalPolicyOptimization(ConstrainedAgent):
         self.params = trainable_of(self.t_L1 + self.t_L2)
 
         # taken logits log
-        self.t_log_logits = tf.log(self.t_logits_taken)
+        self.t_log_logits = tf.log(self.t_logits_taken, name = 'log_logits')
 
         # constraint function for reward min
-        self.t_constraint_return_int = tf.reduce_sum(tf.multiply(self.t_log_logits, self.p_disc_costs))
+        self.t_constraint_return_int = tf.reduce_sum(tf.multiply(self.t_log_logits, self.p_disc_costs), name = 'constr_ret')
 
         # gradient of the CONSTRAINT
-        self.t_g_C = tf.gradients(self.t_constraint_return_int, self.params)
+        self.t_g_C = tf.gradients(self.t_constraint_return_int, self.params, name = 'g_C')
 
         # gradient of the REWARD (PPO function)
-        self.t_g_R = tf.gradients(-self.t_L1, self.params)
+        self.t_g_R = tf.gradients(-self.t_L1, self.params, name = 'g_R')
 
         # goal to constraint gradient cosine
-        self.t_RtoC = cos_similarity(self.t_g_C, self.t_g_R)
+        self.t_RtoC = cos_similarity(self.t_g_C, self.t_g_R, name = 'RtoC')
 
         # TOTAL LOSS
         self.t_loss = self.t_L1 + self.t_L2
@@ -134,9 +134,6 @@ class ConstrainedProximalPolicyOptimization(ConstrainedAgent):
             # one learning iteration
             self.op_opt_step = tf.group([self.op_opt1, self.op_opt2])
 
-        # list of metrics to track
-        self.metrics = []
-
         # buffer for experience
         self.buffer = []
 
@@ -152,11 +149,11 @@ class ConstrainedProximalPolicyOptimization(ConstrainedAgent):
         with tf.control_dependencies([self.op_opt_step]):
             
             # SLACK to go
-            self.t_R = self.threshold - self.t_J_C + tf.reduce_sum(
-                [tf.reduce_sum(tf.multiply(t0 - t1, g)) for t0, t1, g in zip(self.t_theta_0, self.t_theta_1, self.t_g_C) if g is not None])
+            self.t_R = tf.identity(self.threshold - self.t_J_C + tf.reduce_sum(
+                [tf.reduce_sum(tf.multiply(t0 - t1, g)) for t0, t1, g in zip(self.t_theta_0, self.t_theta_1, self.t_g_C) if g is not None]), name = 'Slack')
 
             # negative number if violated, zero if OK
-            self.t_R_clipped = -tf.nn.relu(-self.t_R)
+            self.t_R_clipped = tf.identity(-tf.nn.relu(-self.t_R), name = 'slack_clipped')
             
             # projection
             self.op_project_step = tf.group([t.assign(t + g * self.t_R_clipped / (eps_ + norm_fro_sq(g))) for t, g in zip(self.params, self.t_g_C) if g is not None])
@@ -187,10 +184,6 @@ class ConstrainedProximalPolicyOptimization(ConstrainedAgent):
         """ Called before one training phase """
         self.buffer = []
         pass
-        
-    def track_metrics(self, lst):
-        """ Track all metrics from the list """
-        self.metrics = lst
 
     def train(self):
         """ Train method, typically runs on a GPU """
@@ -212,5 +205,5 @@ class ConstrainedProximalPolicyOptimization(ConstrainedAgent):
             result = self.sess.run([self.op_step] + self.metrics, feed_dict = feed_dict)
         
         # returning the result (all but step)
-        return result[1:]
+        return {x: y for x, y in zip(self.metrics, result[1:])}
 

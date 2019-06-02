@@ -29,6 +29,6 @@ class ConstrainedRandomAgent(ConstrainedAgent):
 
     def train(self):
         """ Train method, typically runs on a GPU """
-        return True
+        return {'foo': 'bar'}
         pass
 

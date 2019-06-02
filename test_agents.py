@@ -9,7 +9,7 @@ def test_random():
     agent = ConstrainedRandomAgent(env)
     loop = ConstrainedEpisodicTrainLoop(env, agent)
     loop.rollout()
-    assert loop.train_step()[1] == True, "Random agent must return True on training"
+    assert isinstance(loop.train_step()[1], dict), "Random agent must return a dict on training"
 
 def test_sppo():
     """ Test that sPPO can be created """
@@ -40,3 +40,5 @@ def test_convergence_unsafe(R_thresh = 180, epochs = 10000):
 
     # check that the reward is indeed good
     assert Rs[-1] > R_thresh, "Must achieve %s in %d epochs, got only %d" % (R_thresh, epochs, Rs[-1])
+
+test_sppo()
