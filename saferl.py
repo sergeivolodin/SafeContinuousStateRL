@@ -176,7 +176,8 @@ class ConstrainedEpisodicTrainLoop():
             # updating the state
             obs = obs_
 
-        return {'Length': L, 'Reward': discount(R, self.env.gamma)[0], 'Cost': discount(C, self.env.gamma)[0]}
+#        return {'Length': L, 'Reward': discount(R, self.env.gamma)[0], 'Cost': discount(C, self.env.gamma)[0]}
+        return {'Reward': discount(R, self.env.gamma)[0], 'Cost': discount(C, self.env.gamma)[0]}
 
 def make_safe_env(env_name, **kwargs):
     """ Factory function to create safe environments """
@@ -230,6 +231,12 @@ def plot_RC(Rs, threshold):
     clear_output()
     # hardcoded colors
     colors = {'Reward': 'green', 'Cost': 'red'}
+    unused_colors = ['b', 'c', 'm', 'y', 'k', 'gray']
+    i = 0
+    for k in Rs.keys():
+        if k not in colors:
+            colors[k] = unused_colors[i]
+            i = (i + 1) % len(unused_colors)
     # constraint threshold line
     plt.axhline(y = threshold, ls = '--', color = colors['Cost'])
     plt.axhline(y = 200, ls = '--', color = colors['Reward'])
@@ -240,10 +247,11 @@ def plot_RC(Rs, threshold):
         color = colors[key] if key in colors else None
         if is_number(val[0]): # 1D data, just plotting
             plt.plot(xs, val, label = key, color = color)
-        elif len(val[0]) == 2: # 2D data -> mean/std
-            mean, std = [np.array(t) for t in zip(*val)]
+        elif len(val[0]) == 4: # 4D data -> mean/std/min/max
+            mean, std, min_, max_ = [np.array(t) for t in zip(*val)]
             plt.plot(xs, mean, label = key, color = color)
-            plt.fill_between(xs, mean - std, mean + std, alpha = 0.5, color = color)
+            plt.fill_between(xs, mean - std, mean + std, alpha = 0.3, color = color)
+            plt.fill_between(xs, min_, max_, alpha = 0.1, color = color)
     plt.legend()
     plt.show()
 
@@ -257,6 +265,7 @@ def estimate_constraint_return(C, D, gamma):
             returns.append(discount(current, gamma)[0])
             current = []
     return np.mean(returns)
+#    return np.median(returns)
 
 def arr_of_dicts_to_dict_of_arrays(arr):
     """ Array of dicts to dict of arrays """
@@ -267,5 +276,5 @@ def summary_of_dict_of_arrays(d):
     """ Mean/std for each key """
     result = {}
     for key, val in d.items():
-        result[key] = (np.mean(val), np.std(val))
+        result[key] = (np.mean(val), np.std(val), np.min(val), np.max(val))
     return result

@@ -44,3 +44,7 @@ def norm_fro_sq(x):
 def trainable_of(loss):
     """ Get trainable variables on which loss depends """
     return [x for x in tf.trainable_variables() if tf.gradients(loss, [x])[0] is not None]
+
+def cond(pred, x, y):
+    """ Conditional expression """
+    return tf.cond(pred, lambda: x, lambda: y)

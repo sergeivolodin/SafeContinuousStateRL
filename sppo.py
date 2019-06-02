@@ -3,7 +3,7 @@ from saferl import *
 
 class ConstrainedProximalPolicyOptimization(ConstrainedAgent):
     """ An RL agent for CMDPs which does random action choices """
-    def __init__(self, env, sess, epsilon = 0.1, delta = 0.01, ignore_constraint = False, steps = 1, lr_policy = 0.01, lr_value = 0.01):
+    def __init__(self, env, sess, epsilon = 0.1, delta = 0.01, ignore_constraint = False, steps = 1, lr_policy = 0.01, lr_value = 0.01, lr_failsafe = 0.01):
         """ Initialize for environment
              eps: policy clipping
              delta: when to stop iterations, max KL-divergence (not implemented yet)
@@ -18,6 +18,7 @@ class ConstrainedProximalPolicyOptimization(ConstrainedAgent):
         self.steps = steps
         self.lr_policy = lr_policy
         self.lr_value = lr_value
+        self.lr_failsafe = lr_failsafe
 
         def g(eps, A):
             """ function g(eps, A), see PPO def. above """
@@ -104,7 +105,7 @@ class ConstrainedProximalPolicyOptimization(ConstrainedAgent):
         self.t_log_logits = tf.log(self.t_logits_taken, name = 'log_logits')
 
         # constraint function for reward min
-        self.t_constraint_return_int = tf.reduce_sum(tf.multiply(self.t_log_logits, self.p_disc_costs), name = 'constr_ret_loss')
+        self.t_constraint_return_int = tf.reduce_mean(tf.multiply(self.t_log_logits, self.p_disc_costs), name = 'constr_ret_loss')
 
         # gradient of the CONSTRAINT
         self.t_g_C = tf.gradients(self.t_constraint_return_int, self.policy_params, name = 'g_C')
@@ -127,45 +128,80 @@ class ConstrainedProximalPolicyOptimization(ConstrainedAgent):
         # save theta1 -> theta0
         self.op_save_to0 = tf.group([a.assign(b) for a, b in zip(self.t_theta_0, self.t_theta_1)])
 
-        # OPTIMIZING after saving theta to theta_0
-        with tf.control_dependencies([self.op_save_to0]):
-            self.op_opt1 = tf.train.GradientDescentOptimizer(self.lr_policy).minimize(self.t_L1)
-            self.op_opt2 = tf.train.GradientDescentOptimizer(self.lr_value).minimize(self.t_L2)
-            # one learning iteration
-            self.op_opt_step = tf.group([self.op_opt1, self.op_opt2])
+        def get_optimizers(deps):
+            # OPTIMIZING after saving theta to theta_0
+            with tf.control_dependencies(deps):
+                op_opt1 = tf.train.GradientDescentOptimizer(self.lr_policy).minimize(self.t_L1)
+                op_opt2 = tf.train.GradientDescentOptimizer(self.lr_value).minimize(self.t_L2)
+                # one learning iteration
+            op_opt_step = tf.group([op_opt1, op_opt2])
+            return op_opt_step, op_opt1, op_opt2
 
         # buffer for experience
         self.buffer = []
 
         # doing unsafe if there is this flag
         if ignore_constraint:
-            self.op_step = self.op_opt_step
+            self.op_step = get_optimizers([])[0]
             return
 
         # non-zero denominator
-        eps_ = 1e-3
+        eps_ = 1e-2
 
-        # assigning theta projection after optimizing
-        with tf.control_dependencies([self.op_opt_step]):
+        # flattened constraint gradient
+        self.t_g_C_flat = concat_list(self.t_g_C)
+
+        def get_projection(deps):
+            # assigning theta projection after optimizing
+            with tf.control_dependencies(deps): 
+                # SLACK to go
+                self.t_R = tf.identity(self.threshold - self.t_J_C + tf.reduce_sum(
+                    [tf.reduce_sum(tf.multiply(t0 - t1, g)) for t0, t1, g in zip(self.t_theta_0, self.t_theta_1, self.t_g_C) if g is not None]), name = 'Slack')
+
+                # negative number if violated, zero if OK
+                self.t_R_clipped = tf.identity(-tf.nn.relu(-self.t_R), name = 'slack_clipped')
             
-            # SLACK to go
-            self.t_R = tf.identity(self.threshold - self.t_J_C + tf.reduce_sum(
-                [tf.reduce_sum(tf.multiply(t0 - t1, g)) for t0, t1, g in zip(self.t_theta_0, self.t_theta_1, self.t_g_C) if g is not None]), name = 'Slack')
 
-            # negative number if violated, zero if OK
-            self.t_R_clipped = tf.identity(-tf.nn.relu(-self.t_R), name = 'slack_clipped')
+                # projection delta
+                self.t_delta_proj = [g * self.t_R_clipped / (eps_ + norm_fro_sq(self.t_g_C_flat)) for g in self.t_g_C]
+
+                # projection step norm
+                self.t_delta_proj_len = tf.linalg.norm(concat_list(self.t_delta_proj), name = 'proj_step')
+
+                # projection
+                self.op_project_step_lambda = lambda: tf.group([t.assign(t + delta_t) for t, delta_t in zip(self.policy_params, self.t_delta_proj)])
             
-            # projection delta
-            self.t_delta_proj = [g * self.t_R_clipped / (eps_ + norm_fro_sq(g)) for g in self.t_g_C]
+                # doing nothing if gradient exploded...
+#                self.op_project_step = tf.cond(tf.linalg.norm(self.t_g_C_flat) < 10, self.op_project_step_lambda, tf.no_op)
+                self.op_project_step = self.op_project_step_lambda()
 
-            # projection step norm
-            self.t_delta_proj_len = concat_list(self.t_delta_proj)
+                return self.op_project_step
 
-            # projection
-            self.op_project_step = tf.group([t.assign(t + delta_t) for t, delta_t in zip(self.policy_params, self.t_delta_proj)])
+        def get_failsafe(): 
+            # in case if policy is unsafe, just minimize the constraint using Policy Gradients
+            self.op_failsafe = tf.train.GradientDescentOptimizer(self.lr_failsafe).minimize(self.t_constraint_return_int)
+            op_opt_step, op_opt1, op_opt2 = get_optimizers([])
+            return tf.group([self.op_failsafe, op_opt2])
 
-        self.op_step = tf.group([self.op_save_to0, self.op_opt_step, self.op_project_step])
-        #step = opt_step
+        def get_normal_ops():
+            op_opt_step, op_opt1, op_opt2 = get_optimizers([self.op_save_to0])
+            proj = get_projection([op_opt_step])
+            return proj
+
+        # in case if policy is safe, maximize reward + do projection
+#        self.op_normal_steps = tf.group([self.op_save_to0, self.op_opt1, self.op_project_step])
+
+        # if safe, doing normal steps, if unsafe, decreasing the constraint value
+#        self.op_step = cond(self.t_J_C < self.threshold, self.op_normal_steps, self.op_failsafe)
+# x + thresh: x=5 too high 2 too high 
+        self.op_step = tf.cond(self.t_J_C < self.threshold, get_normal_ops, get_failsafe)
+
+        # diagnostics
+        self.t_using_safe = cond(self.t_J_C < self.threshold, np.float64(1.0), np.float64(0.0))
+
+        # always doing the value function update
+#        self.op_step = tf.group([self.op_step, self.op_opt2])
+
 
 
     def sample_action(self, observation):
@@ -206,11 +242,14 @@ class ConstrainedProximalPolicyOptimization(ConstrainedAgent):
             self.p_discounted_rewards_to_go: discount_many(R, D, self.gamma), self.p_disc_costs: discount_many(C, D, self.gamma),
             self.p_constraint_return: constraint_return}
 
+        # resulting metrics
+        results = []
+
         for i in range(self.steps):            
             # running the train op
             result = self.sess.run([self.op_step] + self.metrics, feed_dict = feed_dict)
+            results.append({x.name.split(':')[0]: np.mean(y) for x, y in zip(self.metrics, result[1:])})
         
         # returning the result (all but step)
         #assert all([is_number(r) for r in result[1:]]), "Only support scalar metrics, but got " + str(result[1:])
-        return {x.name: np.mean(y) for x, y in zip(self.metrics, result[1:])}
-
+        return summary_of_dict_of_arrays(arr_of_dicts_to_dict_of_arrays(results))
