@@ -1,5 +1,6 @@
 import tensorflow as tf
 import os
+import numpy as np
 
 def create_modest_session():
   # only using device 0
@@ -105,7 +106,7 @@ def CatVariable(shapes, initializer):
     l = np.sum([np.prod(shape) for shape in shapes])
     # V = tf.Variable(tf.zeros(shape=(l,)))
 
-    V = tf.Variable(initializer(shape=(l,)))
+    V = tf.Variable(initializer(shape=(l,), dtype=tf.float64), dtype=tf.float64)
 
     cuts = []
     l = 0

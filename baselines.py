@@ -1,6 +1,8 @@
 from saferl import *
 import tensorflow_probability as tfp
 import cvxpy as cp
+from tf_helpers import *
+import numpy as np
 
 class ConstrainedRandomAgent(ConstrainedAgent):
     """ An RL agent for CMDPs which does random action choices """
@@ -98,28 +100,25 @@ class ConstrainedPolicyOptimization(ConstrainedAgent):
         # tf.distributions.Categorical(probs = logits))) #!!! not using this because want variable first parameter and fixed second
 
         # policy gradient for reward
-        self.g = tf.gradients(-self.loss_r, self.params)
+        self.g = tf.gradients(-self.loss_r, self.params)[0]
 
         # policy gradient for constraint
-        self.b = tf.gradients(-self.loss_c, self.params)
+        self.b = tf.gradients(-self.loss_c, self.params)[0]
 
         # hessian of KL divergence (parameter H)
-        self.H = tf.hessians(kl_div_var_fixed, self.params)
-
-        # flattened parameters
-        self.theta = list(iterate_flatten(self.params))
+        self.H = tf.hessians(self.kl_div_var_fixed, self.params)[0]
 
         # buffer for rollouts
         self.buffer = []
 
     def sample_action(self, observation):
         """ Sample an action given observation, typically runs on a GPU """
-        p = sess.run(self.logits, feed_dict={self.states: [observation]})[0]
+        p = self.sess.run(self.logits, feed_dict={self.states: [observation]})[0]
         return np.random.choice(range(self.n_actions), p=p)
 
     def episode_start(self):
         """ Called each time a new episode starts """
-        self.buffer.append([])
+#        self.buffer.append([])
         pass
 
     def episode_end(self):
@@ -128,7 +127,7 @@ class ConstrainedPolicyOptimization(ConstrainedAgent):
 
     def process_feedback(self, state, action, reward, cost, state_new, done, info):
         """ Called inside the train loop, typically just stores the data """
-        self.buffer[-1].append((state, action, reward, cost, done))
+        self.buffer.append((state, action, reward, cost, done))
 
     def train_start(self):
         """ Called before one training phase """
@@ -171,6 +170,7 @@ class ConstrainedPolicyOptimization(ConstrainedAgent):
             # current parameters
             theta_k = self.sess.run(self.params)
 
+
             # Construct the problem.
             theta = cp.Variable(len(theta_k))
             objective = cp.Maximize(g_.T @ (theta - theta_k))
@@ -198,7 +198,7 @@ class ConstrainedPolicyOptimization(ConstrainedAgent):
 
         def get_HbgRC(rollouts):
             # unpacking rollouts
-            S, A, R, C, D = rollouts
+            S, A, R, C, D = zip(*rollouts)
 
             #global summary_i, s_writer
             H_, b_, g_ = self.sess.run([self.H, self.b, self.g],
@@ -209,7 +209,8 @@ class ConstrainedPolicyOptimization(ConstrainedAgent):
             J_C = estimate_constraint_return(C, D, self.gamma)
             J_R = estimate_constraint_return(R, D, self.gamma)
 
-            return np.array(H_), np.array([b_]).T, np.array([g_]).T, np.array(len(R)), J_R, J_C
+            return np.array(H_), np.array([b_]).T, np.array([g_]).T, J_R, J_C
 
         H_, b_, g_, J_R, J_C = get_HbgRC(self.buffer)
         solve_CPO(H_, b_, g_, J_R, J_C, delta = 0.01, d = self.threshold, H_lambda = 0.01)
+        return {}

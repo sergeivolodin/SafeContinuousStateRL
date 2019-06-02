@@ -12,7 +12,7 @@ def test_random():
     assert loop.train_step()['foo'] == 'bar', "Random agent must return"
 
 def test_sppo():
-    """ Test that sPPO can be created """
+    """ Test that sPPO can be created and trained """
     env = make_safe_env('CartPole-v0-left-half')
     sess = create_modest_session()
     agent = ConstrainedProximalPolicyOptimization(env, sess)
@@ -23,7 +23,7 @@ def test_sppo():
     assert True
 
 def test_cpo():
-    """ Test that sPPO can be created """
+    """ Test that CPO can be created and trained """
     env = make_safe_env('CartPole-v0-left-half')
     sess = create_modest_session()
     agent = ConstrainedPolicyOptimization(env, sess)
