@@ -98,7 +98,7 @@ class ConstrainedProximalPolicyOptimization(ConstrainedAgent):
         self.t_J_C = self.p_constraint_return#self.p_disc_costs[0]
 
         # all parameters
-        self.params = trainable_of(self.t_L1 + self.t_L2)
+        self.policy_params = trainable_of(self.t_L1)
 
         # taken logits log
         self.t_log_logits = tf.log(self.t_logits_taken, name = 'log_logits')
@@ -107,10 +107,10 @@ class ConstrainedProximalPolicyOptimization(ConstrainedAgent):
         self.t_constraint_return_int = tf.reduce_sum(tf.multiply(self.t_log_logits, self.p_disc_costs), name = 'constr_ret_loss')
 
         # gradient of the CONSTRAINT
-        self.t_g_C = tf.gradients(self.t_constraint_return_int, self.params, name = 'g_C')
+        self.t_g_C = tf.gradients(self.t_constraint_return_int, self.policy_params, name = 'g_C')
 
         # gradient of the REWARD (PPO function)
-        self.t_g_R = tf.gradients(-self.t_L1, self.params, name = 'g_R')
+        self.t_g_R = tf.gradients(-self.t_L1, self.policy_params, name = 'g_R')
 
         # goal to constraint gradient cosine
         self.t_RtoC = cos_similarity(self.t_g_C, self.t_g_R, name = 'RtoC')
@@ -119,10 +119,10 @@ class ConstrainedProximalPolicyOptimization(ConstrainedAgent):
         self.t_loss = self.t_L1 + self.t_L2
 
         # variable BEFORE the step
-        self.t_theta_0 = [tf.Variable(tf.zeros_like(p), trainable = False) for p in self.params]
+        self.t_theta_0 = [tf.Variable(tf.zeros_like(p), trainable = False) for p in self.policy_params]
 
         # current parameters
-        self.t_theta_1 = self.params
+        self.t_theta_1 = self.policy_params
 
         # save theta1 -> theta0
         self.op_save_to0 = tf.group([a.assign(b) for a, b in zip(self.t_theta_0, self.t_theta_1)])
@@ -155,8 +155,14 @@ class ConstrainedProximalPolicyOptimization(ConstrainedAgent):
             # negative number if violated, zero if OK
             self.t_R_clipped = tf.identity(-tf.nn.relu(-self.t_R), name = 'slack_clipped')
             
+            # projection delta
+            self.t_delta_proj = [g * self.t_R_clipped / (eps_ + norm_fro_sq(g)) for g in self.t_g_C]
+
+            # projection step norm
+            self.t_delta_proj_len = concat_list(self.t_delta_proj)
+
             # projection
-            self.op_project_step = tf.group([t.assign(t + g * self.t_R_clipped / (eps_ + norm_fro_sq(g))) for t, g in zip(self.params, self.t_g_C) if g is not None])
+            self.op_project_step = tf.group([t.assign(t + delta_t) for t, delta_t in zip(self.policy_params, self.t_delta_proj)])
 
         self.op_step = tf.group([self.op_save_to0, self.op_opt_step, self.op_project_step])
         #step = opt_step

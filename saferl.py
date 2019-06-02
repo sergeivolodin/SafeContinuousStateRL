@@ -232,6 +232,8 @@ def plot_RC(Rs, threshold):
     colors = {'Reward': 'green', 'Cost': 'red'}
     # constraint threshold line
     plt.axhline(y = threshold, ls = '--', color = colors['Cost'])
+    plt.axhline(y = 200, ls = '--', color = colors['Reward'])
+#    plt.yscale('log')
     for key, val in Rs.items():
         if len(val) == 0: continue
         xs = range(len(val))
