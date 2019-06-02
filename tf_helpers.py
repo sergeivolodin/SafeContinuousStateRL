@@ -48,3 +48,108 @@ def trainable_of(loss):
 def cond(pred, x, y):
     """ Conditional expression """
     return tf.cond(pred, lambda: x, lambda: y)
+
+def dz_dw_flatten(z, params):
+    """ Calculate dz/dparams and flatten the result """
+    return tf.concat([tf.reshape(x, shape = (-1,)) for x in tf.gradients(z, params)], axis = 0)
+
+def iterate_flatten(tensor):
+    """ Iterate over flattened items of a tensor """
+    if type(tensor) == list:
+        for t in tensor:
+            for v in iterate_flatten(t):
+                yield v
+    elif len(tensor.shape) == 0:
+        yield tensor
+    else:
+        for idx in range(tensor.shape[0]):
+            for v in iterate_flatten(tensor[idx]):
+                yield v
+                
+def tf_hessian(var, params):
+    # gradients of the loss w.r.t. params
+    grads = tf.gradients(var, params)
+    grad_components = list(iterate_flatten(grads))
+    hessian = [dz_dw_flatten(t, params) for t in (grad_components)]
+    return hessian
+
+class OwnGradientDescent():
+    def __init__(self, gamma = 0.5, theta = 0.9):
+        # gamma (learning rate)
+        self.gamma = tf.Variable(gamma, dtype = tf.float32)
+        self.theta = theta
+        
+    def minimize(self, loss, params):
+        """ Minimize some loss """
+        def decrement_weights(W, gamma, grads):
+            """ w = w - how_much """
+            ops = [w.assign(tf.subtract(w, tf.multiply(gamma, grad))) for w, grad in zip(W, grads)]
+            return tf.group(ops)
+        
+        # gradients of the loss w.r.t. params
+        grads = tf.gradients(loss, params)
+        
+        # perform gradient descent step
+        train_op = decrement_weights(params, self.gamma, grads)
+        
+        # updating gamma
+        upd_op = self.gamma.assign(tf.multiply(self.gamma, self.theta))
+        
+        return tf.group(train_op, upd_op)
+
+def CatVariable(shapes, initializer):
+    """ List of tensors from a single tensor
+    https://github.com/afqueiruga/afqstensorflowexamples/blob/master/afqstensorutils.py
+    """
+
+    l = np.sum([np.prod(shape) for shape in shapes])
+    # V = tf.Variable(tf.zeros(shape=(l,)))
+
+    V = tf.Variable(initializer(shape=(l,)))
+
+    cuts = []
+    l = 0
+    for shp in shapes:
+        il = 1
+        for s in shp: il *= s
+        cuts.append(tf.reshape(V[l:(l+il)],shp))
+        l += il
+    return V, cuts
+
+class FCModelConcat():
+    """ Fully-connected network with all weights in one tensor """
+    def __init__(self, layer_shapes, activation = tf.nn.relu, initializer = tf.random.truncated_normal):
+        """ Initialize with N_neurons (w/o input layer) """
+        self.layer_shapes = layer_shapes
+
+        # list of all shapes required
+        self.shapes = []
+        for i in range(len(layer_shapes) - 1):
+            self.shapes.append((layer_shapes[i], layer_shapes[i + 1]))
+            self.shapes.append((layer_shapes[i + 1],))
+#        print(self.shapes)
+
+        self.activation = activation
+
+        # creating tensors...
+        self.W, self.tensors = CatVariable(self.shapes, initializer = initializer)
+
+        # filling weights and biases
+        self.biases = []
+        self.weights = []
+
+        for i in range(len(self.tensors) // 2):
+            self.weights.append(self.tensors[2 * i])
+            self.biases.append(self.tensors[2 * i + 1])
+
+    def forward(self, l0):
+        # layers
+        with tf.name_scope('layers'):
+            # flattening the input
+            z = tf.reshape(l0, (-1, np.prod(l0.shape[1:])))
+            i_max = len(self.weights) - 1
+            for i in range(i_max + 1):
+                z = z @ self.weights[i] + self.biases[i]
+                if i < i_max:
+                    z = self.activation(z)
+            return z
