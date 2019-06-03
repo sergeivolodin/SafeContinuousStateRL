@@ -134,6 +134,9 @@ class ConstrainedPolicyOptimization(ConstrainedAgent):
         """ Called before one training phase """
         self.buffer = []
 
+    def load_params(self, vector):
+        """ Load params from vector """
+        self.params.load(vector, self.sess)
     def train(self):
         """ Train method, typically runs on a GPU """
 
@@ -143,9 +146,6 @@ class ConstrainedPolicyOptimization(ConstrainedAgent):
         ## TODO: implement backtracking line search
 
         def solve_CPO(H_, b_, g_, J_R, J_C, delta = 0.1, d = self.threshold, H_lambda=0.01):
-            def load_params(vector):
-                """ Load params from vector """
-                self.sess.run(self.params.assign(vector))
 
 
             # CPO hyperparameters
@@ -192,10 +192,10 @@ class ConstrainedPolicyOptimization(ConstrainedAgent):
                 # θ∗ = θk −sqrt(2δ/b^T H−1b)H^-1b. (eq 14)
                 Hinv = np.linalg.inv(H_)
                 theta_safe = theta_k - 0.5 * ((2 * delta / (b_.T @ Hinv @ b_)) ** 0.5 * Hinv @ b_).reshape(-1)
-                load_params(theta_safe)
+                self.load_params(theta_safe)
                 return
 
-            load_params(theta.value)
+            self.load_params(theta.value)
 
         def get_HbgRC(rollouts):
             # unpacking rollouts

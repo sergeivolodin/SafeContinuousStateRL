@@ -226,9 +226,9 @@ def is_number(x):
     """ Check if the argument is a number (python/numpy) """
     return isinstance(x, float) or isinstance(x, int) or isinstance(x, np.floating)
 
-def plot_RC(Rs, threshold, fig_name):
+def plot_RC(Rs, threshold, fig_name, clear = True):
     """ Plot rewards/costs/other """
-    clear_output()
+    if clear: clear_output()
     plt.figure()
     # hardcoded colors
     colors = {'Reward': 'green', 'Cost': 'red'}
