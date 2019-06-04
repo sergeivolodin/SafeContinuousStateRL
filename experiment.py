@@ -44,7 +44,7 @@ if os.path.isfile(params_describe):
 open(params_describe, 'w').write('Nothing[')
 
 # waiting for GPU
-waitGPU.wait(nproc=10, interval = 10, gpu_ids = [0, 1])
+waitGPU.wait(nproc=8, interval = 10, gpu_ids = [0, 1])
 
 from baselines import *
 from saferl import *

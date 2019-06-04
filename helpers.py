@@ -17,7 +17,7 @@ def set_big_font():
 # folder with .sh scripts and .output files
 output_folder = "./output/"
 figures_folder = "./output/figures/"
-run_in_parallel = 20
+run_in_parallel = 16
 
 def varying_for_agent(d):
     """ What changes for optimizer? """

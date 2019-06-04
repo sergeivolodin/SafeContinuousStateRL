@@ -14,11 +14,12 @@ def tst():
   t1= time()
   x = cp.Variable(n)
   objective = cp.Minimize(cp.sum_squares(A*x - b))
-  constraints = [0 <= x, x <= 1]
+  constraints = [1 <= x, x <= 0]
   prob = cp.Problem(objective, constraints)
 
   # The optimal objective value is returned by `prob.solve()`.
   result = prob.solve()
+  print(x.value)
 # The optimal value for x is stored in `x.value`.
 #  print(x.value)
 # The optimal Lagrange multiplier for a constraint is stored in
