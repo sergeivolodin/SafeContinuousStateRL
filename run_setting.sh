@@ -17,4 +17,4 @@ out_fn=$(python create_run.py --delay $delay --setting $1|grep OUTPUT|cut -d " "
 cd output
 bash ../$out_fn
 cd ..
-python analyze_run.py --setting $1 | tee run_${1}.txt
+#python analyze_run.py --setting $1 | tee run_${1}.txt
