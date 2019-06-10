@@ -1,4 +1,4 @@
-name: base
+name: rl
 channels:
   - anaconda
   - oxfordcontrol
@@ -133,5 +133,3 @@ dependencies:
     - wcwidth==0.1.7
     - webencodings==0.5.1
     - widgetsnbextension==3.4.2
-prefix: /localhome/volodin/miniconda3
-

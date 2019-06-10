@@ -11,9 +11,8 @@ We consider CPO, sDQN, PPPO and a random agent. See our <a href="https://www.ove
 Tested on Ubuntu 16.04.5 LTS with 12 CPU, 60GB of RAM and 2x GPU NVidia GeForce 1080.
 
 1. Install <a href="https://docs.conda.io/en/latest/miniconda.html">Anaconda</a> (Python 3.7 option)
-2. Create and activate an environment
 3. Clone/download: `git clone https://github.com/sergeivolodin/SafeContinuousStateRL.git; cd SafeContinuousStateRL`
-4. Install requirements: `pip install -r requirements.txt`. Install tensorflow-gpu by `conda install -c anaconda tensorflow-gpu`
+4. Install requirements: `conda env create -f environment.yml`
 5. Run all settings by calling `run_all.sh`
 6. It will produce `output/*.output` files and `output/figures/*.pdf` files, as well as will output run information to `run_*.txt`
 7. Run the `analyze_run.ipynb` notebook to produce figures
