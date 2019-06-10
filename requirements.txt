@@ -22,7 +22,6 @@ cycler==0.10.0
 Cython==0.29.3
 dask==1.1.0
 decorator==4.3.0
-dfw==1.0a0
 dill==0.2.9
 dionysus==2.0.6
 distributed==1.25.2
